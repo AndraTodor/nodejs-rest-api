@@ -1,13 +1,18 @@
 const express = require("express");
 const {
+  getContacts,
   listContacts,
   getContactById,
   removeContact,
   addContact,
   updateContact,
   updateStatusContact,
-} = require("../../models/contacts");
+} = require("../../controllers/contactController");
+const { authMiddleware } = require("../../middlewares/authMiddleware");
+
 const router = express.Router();
+
+router.get("/", authMiddleware, getContacts);
 
 // GET /api/contacts
 router.get("/", async (req, res, next) => {

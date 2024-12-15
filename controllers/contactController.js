@@ -1,5 +1,24 @@
-const { v4: uuidv4 } = require("uuid");
-const Contact = require("./contact");
+const Contact = require("../models/contact");
+
+const getContacts = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, favorite } = req.query;
+
+    const filter = { owner: req.user._id }; // Doar contactele utilizatorului curent
+    if (favorite !== undefined) {
+      filter.favorite = favorite === "true";
+    }
+
+    const skip = (page - 1) * limit;
+    const contacts = await Contact.find(filter)
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    res.status(200).json(contacts);
+  } catch (error) {
+    next(error);
+  }
+};
 
 const listContacts = async () => {
   return await Contact.find();
@@ -26,6 +45,7 @@ const updateStatusContact = async (contactId, body) => {
 };
 
 module.exports = {
+  getContacts,
   listContacts,
   getContactById,
   removeContact,
