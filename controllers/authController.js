@@ -5,12 +5,16 @@ const fs = require("fs/promises");
 const path = require("path");
 const Jimp = require("jimp");
 const gravatar = require("gravatar");
+const crypto = require("crypto");
+const sgMail = require("@sendgrid/mail");
 
 const avatarsDir = path.join(__dirname, "../public/avatars");
 
 require("dotenv").config();
 
-const { SECRET_KEY } = process.env;
+const { SECRET_KEY, SENDGRID_API_KEY, BASE_URL, SENDGRID_EMAIL_FROM } =
+  process.env;
+sgMail.setApiKey(SENDGRID_API_KEY);
 
 // Funcție de înregistrare si generare avatar
 const register = async (req, res) => {
@@ -23,11 +27,23 @@ const register = async (req, res) => {
 
   const hashedPassword = await bcrypt.hash(password, 10);
   const avatarURL = gravatar.url(email, { s: "250", d: "retro" }, true);
+  const verificationToken = crypto.randomUUID();
+
   const newUser = await User.create({
     email,
     password: hashedPassword,
     avatarURL,
+    verificationToken, // Salvează token-ul de verificare în baza de date
   });
+
+  const verifyEmail = {
+    to: email,
+    from: SENDGRID_EMAIL_FROM,
+    subject: "Verify your email",
+    html: `<p>Click <a href="${BASE_URL}/api/auth/verify/${verificationToken}">here</a> to verify your email.</p>`,
+  };
+
+  await sgMail.send(verifyEmail);
 
   res.status(201).json({
     user: {
@@ -35,6 +51,50 @@ const register = async (req, res) => {
       subscription: newUser.subscription,
     },
   });
+};
+
+// Funcție pentru verificarea emailului
+const verifyEmail = async (req, res) => {
+  const { verificationToken } = req.params;
+
+  const user = await User.findOne({ verificationToken });
+  if (!user) {
+    return res.status(400).json({ message: "User not found" });
+  }
+
+  if (user.verify) {
+    return res.status(404).json({ message: "User already verified" });
+  }
+
+  user.verify = true;
+  await user.save();
+
+  res.status(200).json({ message: "Verification successful" });
+};
+
+// Funcție pentru retrimiterea email-ului de verificare
+const resendVerifyEmail = async (req, res) => {
+  const { email } = req.body;
+
+  const user = await User.findOne({ email });
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (user.verify) {
+    return res.status(400).json({ message: "User already verified" });
+  }
+
+  const verifyEmail = {
+    to: email,
+    from: SENDGRID_EMAIL_FROM,
+    subject: "Verify your email",
+    html: `<p>Click <a href="${BASE_URL}/api/auth/verify/${user.verificationToken}">here</a> to verify your email.</p>`,
+  };
+
+  await sgMail.send(verifyEmail);
+
+  res.status(200).json({ message: "Verification email sent" });
 };
 
 // Funcție de logare
@@ -144,6 +204,8 @@ const updateAvatar = async (req, res) => {
 
 module.exports = {
   register,
+  verifyEmail,
+  resendVerifyEmail,
   login,
   logout,
   getCurrentUser,
