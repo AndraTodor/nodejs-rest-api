@@ -32,6 +32,10 @@ app.use("/api/contacts", contactsRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/users", userRouter);
 
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/public/index.html");
+});
+
 app.use((req, res) => {
   res.status(404).json({ message: "Not found" });
 });
